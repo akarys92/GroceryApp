@@ -94,12 +94,11 @@ class DataStore {
         const index = sessions.findIndex((s) => s.id === updatedSession.id);
         if (index !== -1) {
             sessions[index] = updatedSession;
-            await AsyncStorage.setItem('sessions', JSON.stringify(sessions));
         } else {
-            // If session not found, add it
+            // Add new session
             sessions.push(updatedSession);
-            await AsyncStorage.setItem('sessions', JSON.stringify(sessions));
         }
+        await AsyncStorage.setItem('sessions', JSON.stringify(sessions));
     }
 }
 

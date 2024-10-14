@@ -13,6 +13,7 @@ import { useRouter } from 'expo-router';
 import DataStore, { Session } from './storage/DataStore';
 import { useNavigation } from 'expo-router';
 import { useLayoutEffect } from 'react';
+import { DataTable, IconButton } from 'react-native-paper';
 
 export default function SessionHistoryScreen() {
     const [sessions, setSessions] = useState<Session[]>([]);
@@ -96,14 +97,37 @@ export default function SessionHistoryScreen() {
     );
 
     return (
-        <View style={{ flex: 1, padding: 20 }}>
-            {renderHeader()}
-            <FlatList
-                data={sessions}
-                keyExtractor={(session) => session.id}
-                renderItem={renderItem}
-                ItemSeparatorComponent={() => <View style={styles.separator} />}
-            />
+        <View style={{ flex: 1 }}>
+            <DataTable>
+                {sessions.map((session) => (
+                    <DataTable.Row
+                        key={session.id}
+                        onPress={() =>
+                            router.push({
+                                pathname: '/CartScreen',
+                                params: { sessionId: session.id },
+                            })
+                        }
+                    >
+                        <DataTable.Cell style={{ flex: 2 }}>
+                            {new Date(session.date).toLocaleDateString()}
+                        </DataTable.Cell>
+                        <DataTable.Cell style={{ flex: 2 }}>
+                            {session.location || 'N/A'}
+                        </DataTable.Cell>
+                        <DataTable.Cell numeric style={{ flex: 1 }}>
+                            ${getTotal(session).toFixed(2)}
+                        </DataTable.Cell>
+                        <DataTable.Cell>
+                            <IconButton
+                                icon="delete"
+                                size={20}
+                                onPress={() => deleteSession(session.id)}
+                            />
+                        </DataTable.Cell>
+                    </DataTable.Row>
+                ))}
+            </DataTable>
         </View>
     );
 }

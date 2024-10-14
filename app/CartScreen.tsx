@@ -3,22 +3,16 @@
 import React, { useState, useEffect } from 'react';
 import {
     View,
-    Text,
-    FlatList,
-    Button,
-    TouchableOpacity,
-    TextInput,
     SafeAreaView,
     StyleSheet,
-    Dimensions
+    Dimensions,
 } from 'react-native';
 import DataStore, { Item, Session } from './storage/DataStore';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
+import { TextInput, Button, DataTable, IconButton } from 'react-native-paper';
 import { useNavigation } from 'expo-router';
 import { useLayoutEffect } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
-
-const screenWidth = Dimensions.get('window').width;
 
 export default function CartScreen() {
     const [items, setItems] = useState<Item[]>([]);
@@ -50,9 +44,15 @@ export default function CartScreen() {
                 } else {
                     // Load current session
                     const currentSession = await DataStore.getCurrentSession();
-                    setSession(currentSession);
-                    setItems(currentSession?.items || []);
-                    setLocation(currentSession?.location || '');
+                    if (currentSession) {
+                        setSession(currentSession);
+                        setItems(currentSession.items || []);
+                        setLocation(currentSession.location || '');
+                    } else {
+                        // Handle case where no current session exists
+                        alert('No current session found');
+                        router.replace('/'); // Navigate back to home screen
+                    }
                 }
             };
             fetchItems();
@@ -64,12 +64,15 @@ export default function CartScreen() {
             if (session) {
                 const updatedSession = { ...session, items };
                 setSession(updatedSession);
+
                 if (sessionId) {
                     // Update existing session
                     await DataStore.updateSession(updatedSession);
                 } else {
                     // Save current session
                     await DataStore.saveCurrentSession(updatedSession);
+                    // Also save to sessions list
+                    await DataStore.updateSession(updatedSession);
                 }
             }
         };
@@ -81,10 +84,15 @@ export default function CartScreen() {
             if (session) {
                 const updatedSession = { ...session, location };
                 setSession(updatedSession);
+
                 if (sessionId) {
+                    // Update existing session
                     await DataStore.updateSession(updatedSession);
                 } else {
+                    // Save current session
                     await DataStore.saveCurrentSession(updatedSession);
+                    // Also save to sessions list
+                    await DataStore.updateSession(updatedSession);
                 }
             }
         };
@@ -99,17 +107,17 @@ export default function CartScreen() {
     };
 
     // Save the current session when the component unmounts
-    useEffect(() => {
-        return () => {
-            if (session && !sessionId) {
-                // Move current session to sessions list if it has items
-                if (session.items.length > 0) {
-                    DataStore.saveSession(session);
-                }
-                DataStore.clearCurrentSession();
-            }
-        };
-    }, [session, sessionId]);
+    // useEffect(() => {
+    //     return () => {
+    //         if (session && !sessionId) {
+    //             // Move current session to sessions list if it has items
+    //             if (session.items.length > 0) {
+    //                 DataStore.saveSession(session);
+    //             }
+    //             DataStore.clearCurrentSession();
+    //         }
+    //     };
+    // }, [session, sessionId]);
 
     const getTotal = () => {
         return items.reduce((total, item) => total + item.price * item.quantity, 0);
@@ -124,75 +132,84 @@ export default function CartScreen() {
     };
 
 
-    const renderItem = ({ item }: { item: Item }) => (
-        <View style={styles.itemRow}>
-            <Text style={styles.itemName}>{item.name}</Text>
-            <Text style={styles.itemQuantity}>{item.quantity}</Text>
-            <Text style={styles.itemTotal}>
+    const renderItem = ({ item }: { item: Item }, index: any) => (
+        <DataTable.Row id={index}>
+            <DataTable.Cell style={{ flex: 3 }}>{item.name}</DataTable.Cell>
+            <DataTable.Cell numeric>{item.quantity}</DataTable.Cell>
+            <DataTable.Cell numeric>
                 ${(item.price * item.quantity).toFixed(2)}
-            </Text>
-
-            <TouchableOpacity
-                style={styles.deleteButton}
-                onPress={() => removeItem(item.id)}
-            >
-                <Text style={styles.deleteButtonText}>Remove</Text>
-            </TouchableOpacity>
-
-        </View>
+            </DataTable.Cell>
+            <DataTable.Cell>
+                <IconButton
+                    icon="delete"
+                    size={20}
+                    onPress={() => removeItem(item.id)}
+                />
+            </DataTable.Cell>
+        </DataTable.Row>
     );
 
     return (
         <SafeAreaView style={{ flex: 1 }}>
             <View style={styles.container}>
-                {/* Header Section */}
+                {/* Location Input at the Top */}
+                <View style={styles.locationContainer}>
+                    <TextInput
+                        label="Store Location"
+                        value={location}
+                        onChangeText={setLocation}
+                        editable={true}
+                        style={styles.locationInput}
+                    />
+                </View>
 
-                <View style={styles.header}>
+                {/* Middle Section - Item List */}
+                <View style={styles.middle}>
+                    <DataTable>
+                        {/* Table Header (optional) */}
+                        {/*<DataTable.Header>
+                  <DataTable.Title>Name</DataTable.Title>
+                  <DataTable.Title numeric>Qty</DataTable.Title>
+                  <DataTable.Title numeric>Total</DataTable.Title>
+                  <DataTable.Title>Action</DataTable.Title>
+                </DataTable.Header>*/}
+                        {items.map((item, index) => renderItem({ item }, index))}
+                    </DataTable>
+                </View>
+
+                {/* Footer Section */}
+                <View style={styles.footer}>
                     <Button
-                        title="Scan Item"
+                        mode="contained"
                         onPress={() =>
                             router.push({
                                 pathname: '/BarcodeScannerScreen',
                                 params: { sessionId },
                             })
                         }
-                    />
-                    <View style={{ height: 10 }} />
+                        style={styles.button}
+                        contentStyle={styles.buttonContent}
+                    >
+                        Scan Item
+                    </Button>
                     <Button
-                        title="Add Item Manually"
+                        mode="contained"
                         onPress={() =>
                             router.push({
                                 pathname: '/ItemEntryScreen',
                                 params: { sessionId },
                             })
                         }
-                    />
-                </View>
-
-                {/* Middle Section - Item List */}
-                <View style={styles.middle}>
-
-                    <FlatList
-                        data={items}
-                        keyExtractor={(item) => item.id}
-                        renderItem={renderItem}
-                        ItemSeparatorComponent={() => <View style={styles.separator} />}
-                    />
-                </View>
-
-                {/* Footer Section */}
-                <View style={styles.footer}>
-                    <Text style={styles.totalText}>Total: ${getTotal().toFixed(2)}</Text>
-                    <TextInput
-                        placeholder="Enter Store Location"
-                        value={location}
-                        onChangeText={saveLocationToCurrentSession}
-                        editable={true}
-                        style={[
-                            styles.locationInput,
-                            { color: sessionId ? 'gray' : 'black' },
-                        ]}
-                    />
+                        style={styles.button}
+                        contentStyle={styles.buttonContent}
+                    >
+                        Add Item Manually
+                    </Button>
+                    <View style={styles.totalContainer}>
+                        <Button mode="text" disabled>
+                            Total: ${getTotal().toFixed(2)}
+                        </Button>
+                    </View>
                 </View>
             </View>
         </SafeAreaView>
@@ -203,91 +220,31 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
     },
-    header: {
+    locationContainer: {
         paddingHorizontal: 20,
-        paddingBottom: 10,
+        paddingTop: 10,
+    },
+    locationInput: {
+        marginBottom: 10,
     },
     middle: {
         flex: 1,
-        paddingHorizontal: 20,
-    },
-    headerRow: {
-        flexDirection: 'row',
-        paddingVertical: 5,
-        backgroundColor: '#f0f0f0',
-        borderBottomWidth: 1,
-        borderBottomColor: '#ccc',
-    },
-    headerText: {
-        fontWeight: 'bold',
-        fontSize: 16,
-    },
-    itemRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 10,
-    },
-    nameColumn: {
-        width: screenWidth * 0.35,
-    },
-    quantityColumn: {
-        width: screenWidth * 0.15,
-        textAlign: 'center',
-    },
-    priceColumn: {
-        width: screenWidth * 0.2,
-        textAlign: 'right',
-    },
-    totalColumn: {
-        width: screenWidth * 0.2,
-        textAlign: 'right',
-    },
-    actionColumn: {
-        width: screenWidth * 0.1,
-        textAlign: 'center',
-    },
-    itemText: {
-        fontSize: 16,
-    },
-    itemName: {
-        flex: 3,
-    },
-    itemQuantity: {
-        flex: 1,
-        textAlign: 'center',
-    },
-    itemPrice: {
-        flex: 1,
-        textAlign: 'right',
-    },
-    itemTotal: {
-        flex: 1,
-        textAlign: 'right',
-    },
-    deleteButton: {
-        flex: 1,
-        alignItems: 'center',
-    },
-    deleteButtonText: {
-        color: 'red',
+        paddingHorizontal: 10,
     },
     footer: {
         paddingHorizontal: 20,
         paddingBottom: 20,
         backgroundColor: '#f8f8f8',
+        alignItems: 'center',
     },
-    totalText: {
-        fontSize: 18,
-        marginBottom: 10,
+    button: {
+        width: '100%',
+        marginVertical: 5,
     },
-    locationInput: {
-        borderBottomWidth: 1,
-        marginBottom: 10,
-        fontSize: 16,
-        paddingVertical: 5,
+    buttonContent: {
+        height: 50,
     },
-    separator: {
-        height: 1,
-        backgroundColor: '#ccc',
+    totalContainer: {
+        marginTop: 10,
     },
 });

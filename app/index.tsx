@@ -1,9 +1,10 @@
 // app/index.tsx
 
 import React from 'react';
-import { View, Text, Button } from 'react-native';
+import { View, StyleSheet, ImageBackground } from 'react-native';
 import { useRouter } from 'expo-router';
 import DataStore from './storage/DataStore';
+import { Button, Text, Title } from 'react-native-paper';
 import { useNavigation } from 'expo-router';
 import { useLayoutEffect } from 'react';
 
@@ -18,23 +19,68 @@ export default function HomeScreen() {
     }, [navigation]);
 
     const startNewSession = async () => {
-        // Clear the current session and navigate to CartScreen
+        // Save and clear the current session before starting a new one
+        const currentSession = await DataStore.getCurrentSession();
+        if (currentSession && currentSession.items.length > 0) {
+            await DataStore.saveSession(currentSession);
+        }
         await DataStore.clearCurrentSession();
-        router.push('/CartScreen');
+        router.push('/LocationScreen');
+    };
+
+    const viewPreviousCarts = () => {
+        router.push('/SessionHistoryScreen');
     };
 
     return (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            <Text>Welcome to Grocery Shopping App</Text>
-            <View style={{ marginVertical: 10 }}>
-                <Button title="Start New Session" onPress={startNewSession} />
-            </View>
-            <View style={{ marginVertical: 10 }}>
+        <ImageBackground
+            style={styles.background}
+        >
+            <View style={styles.container}>
+                <Title style={styles.title}>Welcome to Grocery Shopping App</Title>
                 <Button
-                    title="View Previous Carts"
-                    onPress={() => router.push('/SessionHistoryScreen')}
-                />
+                    mode="contained"
+                    onPress={startNewSession}
+                    style={styles.button}
+                    contentStyle={styles.buttonContent}
+                >
+                    Start New Session
+                </Button>
+                <Button
+                    mode="outlined"
+                    onPress={viewPreviousCarts}
+                    style={styles.button}
+                    contentStyle={styles.buttonContent}
+                >
+                    View Previous Carts
+                </Button>
             </View>
-        </View>
+        </ImageBackground>
     );
 }
+
+const styles = StyleSheet.create({
+    background: {
+        flex: 1,
+        resizeMode: 'cover', // Adjust the background image
+    },
+    container: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+
+        backgroundColor: 'rgba(255,255,255,0.8)', // Semi-transparent background
+    },
+    title: {
+        fontSize: 24,
+        marginBottom: 40,
+        color: '#333',
+    },
+    button: {
+        width: '80%',
+        marginVertical: 10,
+    },
+    buttonContent: {
+        height: 50,
+    },
+});

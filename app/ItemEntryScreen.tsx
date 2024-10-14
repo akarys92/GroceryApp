@@ -1,10 +1,11 @@
 // app/ItemEntryScreen.tsx
 
-import React, { useState } from 'react';
-import { View, Text, TextInput, Button } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, StyleSheet, TextInput as RNTextInput } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import DataStore, { Item, type Session } from './storage/DataStore';
 import uuid from 'react-native-uuid';
+import { TextInput, Button } from 'react-native-paper';
 import { useNavigation } from 'expo-router';
 import { useLayoutEffect } from 'react';
 
@@ -13,11 +14,6 @@ export default function ItemEntryScreen() {
         barcodeData?: string;
         sessionId?: string;
     }>();
-
-    const [name, setName] = useState<string>(barcodeData || '');
-    const [price, setPrice] = useState<string>('');
-    const [quantity, setQuantity] = useState<string>('1');
-    const router = useRouter();
     const navigation = useNavigation();
 
     useLayoutEffect(() => {
@@ -26,6 +22,23 @@ export default function ItemEntryScreen() {
         });
     }, [navigation]);
 
+    const [name, setName] = useState<string>(barcodeData || '');
+    const [price, setPrice] = useState<string>('');
+    const [quantity, setQuantity] = useState<string>('1');
+    const router = useRouter();
+
+    const priceRef = useRef<RNTextInput>(null);
+    const quantityRef = useRef<RNTextInput>(null);
+
+    const formatPrice = (value: string) => {
+        // Remove non-digit characters
+        const cleaned = value.replace(/\D/g, '');
+        // Parse to number
+        const number = parseInt(cleaned || '0', 10);
+        // Divide by 100 to get decimal
+        const formatted = (number / 100).toFixed(2);
+        setPrice(formatted);
+    };
 
     const addItemToCart = async () => {
         // Validate inputs
@@ -55,12 +68,8 @@ export default function ItemEntryScreen() {
             // Load current session
             session = await DataStore.getCurrentSession();
             if (!session) {
-                session = {
-                    id: uuid.v4().toString(),
-                    date: new Date().toISOString(),
-                    location: '',
-                    items: [],
-                };
+                alert('No current session found');
+                return;
             }
         }
 
@@ -78,44 +87,58 @@ export default function ItemEntryScreen() {
     };
 
     return (
-        <View style={{ padding: 20 }}>
-            <Text style={{ fontSize: 18, marginBottom: 10 }}>Enter Item Details</Text>
+        <View style={styles.container}>
             <TextInput
-                placeholder="Item Name"
+                label="Item Name"
                 value={name}
                 onChangeText={setName}
-                style={{
-                    borderBottomWidth: 1,
-                    marginBottom: 10,
-                    paddingVertical: 5,
-                    fontSize: 16,
-                }}
+                style={styles.input}
+                returnKeyType="next"
+                onSubmitEditing={() => priceRef.current?.focus()}
+                autoFocus={!barcodeData}
             />
             <TextInput
-                placeholder="Price"
+                label="Price"
                 value={price}
-                onChangeText={setPrice}
+                onChangeText={formatPrice}
                 keyboardType="numeric"
-                style={{
-                    borderBottomWidth: 1,
-                    marginBottom: 10,
-                    paddingVertical: 5,
-                    fontSize: 16,
-                }}
+                style={styles.input}
+                ref={priceRef}
+                returnKeyType="next"
+                onSubmitEditing={() => quantityRef.current?.focus()}
+                autoFocus={!!barcodeData}
             />
             <TextInput
-                placeholder="Quantity"
+                label="Quantity"
                 value={quantity}
                 onChangeText={setQuantity}
                 keyboardType="numeric"
-                style={{
-                    borderBottomWidth: 1,
-                    marginBottom: 20,
-                    paddingVertical: 5,
-                    fontSize: 16,
-                }}
+                style={styles.input}
+                ref={quantityRef}
             />
-            <Button title="Add to Cart" onPress={addItemToCart} />
+            <Button
+                mode="contained"
+                onPress={addItemToCart}
+                style={styles.button}
+                contentStyle={styles.buttonContent}
+            >
+                Add to Cart
+            </Button>
         </View>
     );
 }
+
+const styles = StyleSheet.create({
+    container: {
+        padding: 20,
+    },
+    input: {
+        marginBottom: 15,
+    },
+    button: {
+        marginTop: 10,
+    },
+    buttonContent: {
+        height: 50,
+    },
+});
