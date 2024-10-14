@@ -1,118 +1,146 @@
 // app/CartScreen.tsx
+
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, Button, TouchableOpacity } from 'react-native';
-import DataStore, { Item, type Session } from './storage/DataStore';
-import { useRouter } from 'expo-router';
+import {
+    View,
+    Text,
+    FlatList,
+    Button,
+    TouchableOpacity,
+    TextInput,
+    SafeAreaView,
+    StyleSheet,
+    Dimensions
+} from 'react-native';
+import DataStore, { Item, Session } from './storage/DataStore';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useNavigation } from 'expo-router';
-import { useLocalSearchParams } from 'expo-router';
-import { Alert, TextInput } from 'react-native';
 import { useLayoutEffect } from 'react';
-import { ScrollView, SafeAreaView } from 'react-native';
-import { StyleSheet } from 'react-native';
-import { uuid } from 'expo-modules-core';
+import { useFocusEffect } from '@react-navigation/native';
+
+const screenWidth = Dimensions.get('window').width;
 
 export default function CartScreen() {
     const [items, setItems] = useState<Item[]>([]);
     const [session, setSession] = useState<Session | null>(null);
+    const [location, setLocation] = useState<string>('');
     const router = useRouter();
     const navigation = useNavigation();
     const { sessionId } = useLocalSearchParams<{ sessionId?: string }>();
-    const [location, setLocation] = useState<string>("");
 
     useLayoutEffect(() => {
         navigation.setOptions({
             headerTitle: 'My Cart',
         });
-    }, [navigation])
+    }, [navigation]);
 
-    useEffect(() => {
-        const fetchItems = async () => {
-            if (sessionId) {
-                // Load the specified session
-                const sessions = await DataStore.getSessions();
-                const selectedSession = sessions.find((s) => s.id === sessionId);
-                if (selectedSession) {
-                    setSession(selectedSession);
-                    setItems(selectedSession.items);
-                    await DataStore.saveCurrentSession(selectedSession);
+    // Fetch data when the screen gains focus
+    useFocusEffect(
+        React.useCallback(() => {
+            const fetchItems = async () => {
+                if (sessionId) {
+                    // Load the specified session
+                    const sessions = await DataStore.getSessions();
+                    const selectedSession = sessions.find((s) => s.id === sessionId);
+                    if (selectedSession) {
+                        setSession(selectedSession);
+                        setItems(selectedSession.items);
+                        setLocation(selectedSession.location || '');
+                    }
+                } else {
+                    // Load current session
+                    const currentSession = await DataStore.getCurrentSession();
+                    setSession(currentSession);
+                    setItems(currentSession?.items || []);
+                    setLocation(currentSession?.location || '');
                 }
-            } else {
-                // Create a new session
-                let session: Session = {
-                    id: uuid.v4().toString(),
-                    date: new Date().toISOString(),
-                    location: '',
-                    items: [],
-                };
-            }
-        };
-        fetchItems();
-    }, [])
+            };
+            fetchItems();
+        }, [sessionId])
+    );
 
     useEffect(() => {
-        console.log("Adding item to session: ", sessionId)
-        const saveCurrentSession = async () => {
-            if (session && !sessionId) {
+        const saveSession = async () => {
+            if (session) {
                 const updatedSession = { ...session, items };
                 setSession(updatedSession);
-                await DataStore.saveCurrentSession(updatedSession);
+                if (sessionId) {
+                    // Update existing session
+                    await DataStore.updateSession(updatedSession);
+                } else {
+                    // Save current session
+                    await DataStore.saveCurrentSession(updatedSession);
+                }
             }
         };
-        saveCurrentSession();
+        saveSession();
     }, [items]);
 
     useEffect(() => {
-        const saveCurrentSession = async () => {
-            if (session && !sessionId) {
+        const saveSession = async () => {
+            if (session) {
                 const updatedSession = { ...session, location };
                 setSession(updatedSession);
-                await DataStore.saveCurrentSession(updatedSession);
+                if (sessionId) {
+                    await DataStore.updateSession(updatedSession);
+                } else {
+                    await DataStore.saveCurrentSession(updatedSession);
+                }
             }
         };
-        saveCurrentSession();
+        saveSession();
     }, [location]);
 
-
-    useEffect(() => {
-        console.log('SessionId updated:', sessionId);
-        const fetchItems = async () => {
-            if (sessionId) {
-                // Load the specified session
-                const sessions = await DataStore.getSessions();
-                const selectedSession = sessions.find((s) => s.id === sessionId);
-                if (selectedSession) {
-                    setSession(selectedSession);
-                    setItems(selectedSession.items);
-                    await DataStore.saveCurrentSession(selectedSession);
-                }
-            } else {
-                // Load current session
-                const currentSession = await DataStore.getCurrentSession();
-                setSession(currentSession);
-                setItems(currentSession?.items || []);
-            }
-        };
-        fetchItems();
-    }, [sessionId]);
-
-    const saveLocationToCurrentSession = async (text: string) => {
+    const saveLocationToCurrentSession = (text: string) => {
         if (session && !sessionId) {
-            session.location = text;
-            await DataStore.saveCurrentSession(session);
+            setLocation(text);
+            // The useEffect on [location] will handle saving
         }
     };
 
+    // Save the current session when the component unmounts
+    useEffect(() => {
+        return () => {
+            if (session && !sessionId) {
+                // Move current session to sessions list if it has items
+                if (session.items.length > 0) {
+                    DataStore.saveSession(session);
+                }
+                DataStore.clearCurrentSession();
+            }
+        };
+    }, [session, sessionId]);
 
     const getTotal = () => {
         return items.reduce((total, item) => total + item.price * item.quantity, 0);
     };
 
-    const removeItem = async (id: string) => {
-        if (session && !sessionId) {
+    const removeItem = (id: string) => {
+        if (session) {
             const updatedItems = items.filter((item) => item.id !== id);
             setItems(updatedItems);
+            // The useEffect on [items] will handle saving
         }
     };
+
+
+    const renderItem = ({ item }: { item: Item }) => (
+        <View style={styles.itemRow}>
+            <Text style={styles.itemName}>{item.name}</Text>
+            <Text style={styles.itemQuantity}>{item.quantity}</Text>
+            <Text style={styles.itemTotal}>
+                ${(item.price * item.quantity).toFixed(2)}
+            </Text>
+
+            <TouchableOpacity
+                style={styles.deleteButton}
+                onPress={() => removeItem(item.id)}
+            >
+                <Text style={styles.deleteButtonText}>Remove</Text>
+            </TouchableOpacity>
+
+        </View>
+    );
 
     return (
         <SafeAreaView style={{ flex: 1 }}>
@@ -122,34 +150,33 @@ export default function CartScreen() {
                 <View style={styles.header}>
                     <Button
                         title="Scan Item"
-                        onPress={() => router.push('/BarcodeScannerScreen')}
+                        onPress={() =>
+                            router.push({
+                                pathname: '/BarcodeScannerScreen',
+                                params: { sessionId },
+                            })
+                        }
                     />
                     <View style={{ height: 10 }} />
                     <Button
                         title="Add Item Manually"
-                        onPress={() => router.push('/ItemEntryScreen')}
+                        onPress={() =>
+                            router.push({
+                                pathname: '/ItemEntryScreen',
+                                params: { sessionId },
+                            })
+                        }
                     />
                 </View>
 
-
-                {/* Middle Section - Scrollable Item List */}
+                {/* Middle Section - Item List */}
                 <View style={styles.middle}>
+
                     <FlatList
                         data={items}
                         keyExtractor={(item) => item.id}
-                        renderItem={({ item }) => (
-                            <View style={styles.itemRow}>
-                                <Text>{item.name}</Text>
-                                <Text>
-                                    {item.quantity} x ${item.price.toFixed(2)}
-                                </Text>
-                                {!sessionId && (
-                                    <TouchableOpacity onPress={() => removeItem(item.id)}>
-                                        <Text style={{ color: 'red' }}>Remove</Text>
-                                    </TouchableOpacity>
-                                )}
-                            </View>
-                        )}
+                        renderItem={renderItem}
+                        ItemSeparatorComponent={() => <View style={styles.separator} />}
                     />
                 </View>
 
@@ -159,18 +186,13 @@ export default function CartScreen() {
                     <TextInput
                         placeholder="Enter Store Location"
                         value={location}
-                        onChangeText={(text) => {
-                            setLocation(text);
-                            saveLocationToCurrentSession(text);
-                        }}
-                        editable={!sessionId}
+                        onChangeText={saveLocationToCurrentSession}
+                        editable={true}
                         style={[
                             styles.locationInput,
                             { color: sessionId ? 'gray' : 'black' },
                         ]}
                     />
-                    <Text>Session: {session?.id}</Text>
-                    <Text>SessionId: {sessionId}</Text>
                 </View>
             </View>
         </SafeAreaView>
@@ -189,10 +211,65 @@ const styles = StyleSheet.create({
         flex: 1,
         paddingHorizontal: 20,
     },
+    headerRow: {
+        flexDirection: 'row',
+        paddingVertical: 5,
+        backgroundColor: '#f0f0f0',
+        borderBottomWidth: 1,
+        borderBottomColor: '#ccc',
+    },
+    headerText: {
+        fontWeight: 'bold',
+        fontSize: 16,
+    },
     itemRow: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
+        alignItems: 'center',
         paddingVertical: 10,
+    },
+    nameColumn: {
+        width: screenWidth * 0.35,
+    },
+    quantityColumn: {
+        width: screenWidth * 0.15,
+        textAlign: 'center',
+    },
+    priceColumn: {
+        width: screenWidth * 0.2,
+        textAlign: 'right',
+    },
+    totalColumn: {
+        width: screenWidth * 0.2,
+        textAlign: 'right',
+    },
+    actionColumn: {
+        width: screenWidth * 0.1,
+        textAlign: 'center',
+    },
+    itemText: {
+        fontSize: 16,
+    },
+    itemName: {
+        flex: 3,
+    },
+    itemQuantity: {
+        flex: 1,
+        textAlign: 'center',
+    },
+    itemPrice: {
+        flex: 1,
+        textAlign: 'right',
+    },
+    itemTotal: {
+        flex: 1,
+        textAlign: 'right',
+    },
+    deleteButton: {
+        flex: 1,
+        alignItems: 'center',
+    },
+    deleteButtonText: {
+        color: 'red',
     },
     footer: {
         paddingHorizontal: 20,
@@ -209,12 +286,8 @@ const styles = StyleSheet.create({
         fontSize: 16,
         paddingVertical: 5,
     },
+    separator: {
+        height: 1,
+        backgroundColor: '#ccc',
+    },
 });
-
-/*
-How this should work: 
-1. On page load, check if a sessionId was given. If it was, load that sesion. If it wasn't create a new session. 
-2. On add item open, send the sessionId to the component. In the component, just add to that session, then drop back to the cart passing the sessionID back. 
-3. When the location changes, update the sesion directly
-I think this removes the notion of a current session
-*/

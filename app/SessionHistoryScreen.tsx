@@ -1,13 +1,29 @@
 // app/SessionHistoryScreen.tsx
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Alert, Button } from 'react-native';
+import {
+    View,
+    Text,
+    FlatList,
+    TouchableOpacity,
+    Alert,
+    StyleSheet,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import DataStore, { Session } from './storage/DataStore';
+import { useNavigation } from 'expo-router';
+import { useLayoutEffect } from 'react';
 
 export default function SessionHistoryScreen() {
     const [sessions, setSessions] = useState<Session[]>([]);
     const router = useRouter();
+    const navigation = useNavigation();
+
+    useLayoutEffect(() => {
+        navigation.setOptions({
+            headerTitle: 'History',
+        });
+    }, [navigation]);
 
     useEffect(() => {
         const fetchSessions = async () => {
@@ -40,33 +56,103 @@ export default function SessionHistoryScreen() {
         );
     };
 
+    const renderHeader = () => (
+        <View style={styles.headerRow}>
+            <Text style={[styles.headerText, styles.dateColumn]}>Date</Text>
+            <Text style={[styles.headerText, styles.locationColumn]}>Location</Text>
+            <Text style={[styles.headerText, styles.amountColumn]}>Amount</Text>
+            <Text style={[styles.headerText, styles.actionColumn]}>Action</Text>
+        </View>
+    );
+
+    const renderItem = ({ item: session }: { item: Session }) => (
+        <View style={styles.itemRow}>
+            <TouchableOpacity
+                style={styles.rowContent}
+                onPress={() => {
+                    router.push({
+                        pathname: '/CartScreen',
+                        params: { sessionId: session.id },
+                    });
+                }}
+            >
+                <Text style={[styles.itemText, styles.dateColumn]}>
+                    {new Date(session.date).toLocaleDateString()}
+                </Text>
+                <Text style={[styles.itemText, styles.locationColumn]}>
+                    {session.location || 'N/A'}
+                </Text>
+                <Text style={[styles.itemText, styles.amountColumn]}>
+                    ${getTotal(session).toFixed(2)}
+                </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+                style={styles.deleteButton}
+                onPress={() => deleteSession(session.id)}
+            >
+                <Text style={styles.deleteButtonText}>Delete</Text>
+            </TouchableOpacity>
+        </View>
+    );
+
     return (
         <View style={{ flex: 1, padding: 20 }}>
+            {renderHeader()}
             <FlatList
                 data={sessions}
                 keyExtractor={(session) => session.id}
-                renderItem={({ item: session }) => (
-                    <View style={{ paddingVertical: 10 }}>
-                        <TouchableOpacity
-                            onPress={() => {
-                                router.push({
-                                    pathname: '/CartScreen',
-                                    params: { sessionId: session.id },
-                                });
-                            }}
-                        >
-                            <Text>Date: {new Date(session.date).toLocaleString()}</Text>
-                            <Text>Location: {session.location || 'N/A'}</Text>
-                            <Text>Amount: ${getTotal(session).toFixed(2)}</Text>
-                        </TouchableOpacity>
-                        <Button
-                            title="Delete"
-                            color="red"
-                            onPress={() => deleteSession(session.id)}
-                        />
-                    </View>
-                )}
+                renderItem={renderItem}
+                ItemSeparatorComponent={() => <View style={styles.separator} />}
             />
         </View>
     );
 }
+
+const styles = StyleSheet.create({
+    headerRow: {
+        flexDirection: 'row',
+        paddingVertical: 5,
+        borderBottomWidth: 1,
+        borderBottomColor: '#ccc',
+    },
+    headerText: {
+        fontWeight: 'bold',
+    },
+    itemRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 10,
+    },
+    rowContent: {
+        flexDirection: 'row',
+        flex: 1,
+    },
+    dateColumn: {
+        flex: 2,
+    },
+    locationColumn: {
+        flex: 2,
+    },
+    amountColumn: {
+        flex: 1,
+        textAlign: 'right',
+    },
+    actionColumn: {
+        flex: 1,
+        textAlign: 'center',
+    },
+    itemText: {
+        fontSize: 16,
+    },
+    deleteButton: {
+        flex: 1,
+        alignItems: 'center',
+    },
+    deleteButtonText: {
+        color: 'red',
+    },
+    separator: {
+        height: 1,
+        backgroundColor: '#ccc',
+    },
+});
