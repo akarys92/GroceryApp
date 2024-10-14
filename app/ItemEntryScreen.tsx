@@ -3,15 +3,29 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, Button } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import DataStore, { Item } from './storage/DataStore';
+import DataStore, { Item, type Session } from './storage/DataStore';
 import uuid from 'react-native-uuid';
+import { useNavigation } from 'expo-router';
+import { useLayoutEffect } from 'react';
 
 export default function ItemEntryScreen() {
-    const { barcodeData } = useLocalSearchParams<{ barcodeData?: string }>();
+    const { barcodeData, sessionId } = useLocalSearchParams<{
+        barcodeData?: string;
+        sessionId?: string;
+    }>();
+
     const [name, setName] = useState<string>(barcodeData || '');
     const [price, setPrice] = useState<string>('');
     const [quantity, setQuantity] = useState<string>('1');
     const router = useRouter();
+    const navigation = useNavigation();
+
+    useLayoutEffect(() => {
+        navigation.setOptions({
+            headerTitle: 'Add Item',
+        });
+    }, [navigation]);
+
 
     const addItemToCart = async () => {
         // Validate inputs
@@ -27,19 +41,40 @@ export default function ItemEntryScreen() {
             quantity: parseInt(quantity),
         };
 
-        let session = await DataStore.getCurrentSession();
-        if (!session) {
-            session = {
-                id: uuid.v4().toString(),
-                date: new Date().toISOString(),
-                location: '',
-                items: [],
-            };
-            console.log("Added new Session: ", session.id)
+        let session: Session | null = null;
+
+        if (sessionId) {
+            // Load the specified session
+            const sessions = await DataStore.getSessions();
+            session = sessions.find((s) => s.id === sessionId) || null;
+            if (!session) {
+                alert('Session not found');
+                return;
+            }
+        } else {
+            // Load current session
+            session = await DataStore.getCurrentSession();
+            if (!session) {
+                session = {
+                    id: uuid.v4().toString(),
+                    date: new Date().toISOString(),
+                    location: '',
+                    items: [],
+                };
+            }
         }
+
         session.items.push(item);
-        await DataStore.saveCurrentSession(session);
-        router.push({ pathname: '/CartScreen', params: { sessionId: session.id } });
+
+        if (sessionId) {
+            // Update the existing session
+            await DataStore.updateSession(session);
+        } else {
+            // Save current session
+            await DataStore.saveCurrentSession(session);
+        }
+
+        router.back();
     };
 
     return (

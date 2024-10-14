@@ -2,22 +2,24 @@
 
 import React from 'react';
 import { View, Text, Button } from 'react-native';
-import { useRouter, Link } from 'expo-router';
+import { useRouter } from 'expo-router';
 import DataStore from './storage/DataStore';
+import { useNavigation } from 'expo-router';
+import { useLayoutEffect } from 'react';
 
 export default function HomeScreen() {
     const router = useRouter();
+    const navigation = useNavigation();
+
+    useLayoutEffect(() => {
+        navigation.setOptions({
+            headerTitle: 'Home',
+        });
+    }, [navigation]);
 
     const startNewSession = async () => {
-        // Get the current session
-        const currentSession = await DataStore.getCurrentSession();
-        if (currentSession && currentSession.items.length > 0) {
-            // Move the current session to sessions list
-            await DataStore.saveSession(currentSession);
-        }
-        // Clear the current session
+        // Clear the current session and navigate to CartScreen
         await DataStore.clearCurrentSession();
-        // Navigate to CartScreen
         router.push('/CartScreen');
     };
 
@@ -28,9 +30,10 @@ export default function HomeScreen() {
                 <Button title="Start New Session" onPress={startNewSession} />
             </View>
             <View style={{ marginVertical: 10 }}>
-                <Link href="/SessionHistoryScreen" asChild>
-                    <Button title="View Previous Carts" />
-                </Link>
+                <Button
+                    title="View Previous Carts"
+                    onPress={() => router.push('/SessionHistoryScreen')}
+                />
             </View>
         </View>
     );
